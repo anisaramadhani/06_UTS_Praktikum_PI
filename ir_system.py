@@ -102,8 +102,6 @@ def create_index(dataset_dir="dataset", index_dir="indexdir"):
                         continue
                     for i, row in df.iterrows():
                         content = preprocess(str(row[col]))
-                        if content.strip() == "":
-                            continue
                         title = f"{file}_row_{i}"
                         writer.add_document(title=title, path=path, content=content)
                         total_docs += 1
@@ -113,7 +111,6 @@ def create_index(dataset_dir="dataset", index_dir="indexdir"):
 
     writer.commit()
     print(f"\n[INFO] Indexing selesai. Total dokumen terindeks: {total_docs}")
-    print(f"[INFO] File index tersimpan dalam folder: '{index_dir}'\n")
 
 # =============== SEARCH & RANKING ===============
 def search_query(index_dir, query):
@@ -131,10 +128,6 @@ def search_query(index_dir, query):
         docs = [(r["title"], r["content"]) for r in results]
 
         if not docs:
-            # Fallback: jika Whoosh tidak menemukan dokumen (mis-tokenization karena
-            # data CSV rusak / tanpa spasi), lakukan pencarian substring langsung
-            # pada file-file CSV di folder 'dataset'. Ini menangkap kasus seperti
-            # 'pesawatUnited' atau 'Airlinesmendarat' yang ter-join tanpa spasi.
             print("[INFO] Tidak ada dokumen ditemukan oleh Whoosh. Mencoba fallback substring scan pada CSV...")
             found = []
             terms = [t.lower() for t in query.split() if t.strip()]
@@ -164,15 +157,11 @@ def search_query(index_dir, query):
 
         print(f"[INFO] Ditemukan {len(docs)} dokumen relevan untuk query '{query}'.")
 
-        # Representasi dokumen (CountVectorizer)
         corpus = [d[1] for d in docs]
         vectorizer = CountVectorizer()
         vectors = vectorizer.fit_transform(corpus + [preprocess(query)])
-
-        # Hitung cosine similarity
         cosine_scores = cosine_similarity(vectors[-1], vectors[:-1]).flatten()
 
-        # Urutkan berdasarkan skor tertinggi
         ranked = sorted(zip(docs, cosine_scores), key=lambda x: x[1], reverse=True)[:5]
 
         print("\n=== Top 5 Hasil Pencarian (CountVectorizer + Cosine) ===")
@@ -180,9 +169,18 @@ def search_query(index_dir, query):
             print(f"{i}. {title} (Skor: {score:.4f})")
         print()
 
+        # ============ TABEL OUTPUT ============
+        print("=== Tabel Hasil Perangkingan ===")
+        print("+-----------+----------------------+---------------+")
+        print("| Ranking   | Judul Dokumen        | Skor Cosine   |")
+        print("+-----------+----------------------+---------------+")
+        for i, ((title, _), score) in enumerate(ranked, 1):
+            print(f"| {i:<9} | {title:<20} | {score:>0.4f}       |")
+        print("+-----------+----------------------+---------------+\n")
+
 # =============== CLI INTERFACE ===============
 def main():
-    dataset_dir = "dataset"  # folder kamu sekarang bernama 'dataset'
+    dataset_dir = "dataset"
     index_dir = "indexdir"
 
     while True:
