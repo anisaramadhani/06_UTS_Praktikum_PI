@@ -1,6 +1,7 @@
 # ir_system.py
 import os
 import string
+import re
 import pandas as pd
 from whoosh import index
 from whoosh.fields import Schema, TEXT, ID
@@ -10,16 +11,52 @@ from sklearn.metrics.pairwise import cosine_similarity
 import nltk
 from nltk.corpus import stopwords
 
-nltk.download("stopwords")
+# Download stopwords jika belum ada (skip jika error koneksi)
+try:
+    nltk.download("stopwords", quiet=True)
+except:
+    pass  # Abaikan error download, asumsi stopwords sudah terinstall
 
 # =============== PREPROCESSING ===============
 def preprocess(text):
     """Case folding, tokenization, stopword removal"""
     if not isinstance(text, str):
         text = str(text)
+    # Be robust to malformed spacing like 'pesawatUnited' -> insert a space
+    # between a lowercase letter followed by an uppercase letter
+    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+    # normalize whitespace and lower-case
+    text = " ".join(text.split())
     text = text.lower()
+    # remove punctuation
     text = text.translate(str.maketrans("", "", string.punctuation))
+    
+    # Custom stopwords: hapus kata-kata penting dari stopwords default
     stop_words = set(stopwords.words("indonesian"))
+    # Kata-kata penting yang tidak boleh dihapus
+    important_words = {
+        # Hukum & Kriminal
+        'kasus', 'polisi', 'jaksa', 'hakim', 'pengadilan', 'tersangka', 
+        'terdakwa', 'korban', 'saksi', 'bukti', 'hukum', 'pidana', 'perdata',
+        'vonis', 'tuntutan', 'pengacara', 'kuasa', 'pasal',
+        # Politik & Pemerintahan
+        'presiden', 'menteri', 'gubernur', 'bupati', 'walikota', 'dpr', 'dprd',
+        'pemerintah', 'negara', 'rakyat', 'pemilu', 'pilkada', 'partai',
+        # Ekonomi & Bisnis
+        'ekonomi', 'bisnis', 'pasar', 'harga', 'rupiah', 'inflasi', 'bank',
+        'investasi', 'saham', 'perusahaan', 'industri', 'perdagangan',
+        # Kesehatan
+        'pasien', 'rumah', 'sakit', 'dokter', 'obat', 'virus', 'covid',
+        'vaksin', 'pandemi', 'wabah', 'kesehatan',
+        # Pendidikan
+        'mahasiswa', 'siswa', 'guru', 'dosen', 'universitas', 'sekolah',
+        'kampus', 'pendidikan', 'kuliah', 'ujian',
+        # Umum
+        'data', 'informasi', 'media', 'berita', 'laporan', 'hasil', 'proses',
+        'sistem', 'program', 'kegiatan', 'masalah', 'solusi', 'dampak'
+    }
+    stop_words = stop_words - important_words
+    
     tokens = [w for w in text.split() if w not in stop_words]
     return " ".join(tokens)
 
@@ -94,8 +131,36 @@ def search_query(index_dir, query):
         docs = [(r["title"], r["content"]) for r in results]
 
         if not docs:
-            print("[INFO] Tidak ada dokumen ditemukan untuk query tersebut.")
-            return
+            # Fallback: jika Whoosh tidak menemukan dokumen (mis-tokenization karena
+            # data CSV rusak / tanpa spasi), lakukan pencarian substring langsung
+            # pada file-file CSV di folder 'dataset'. Ini menangkap kasus seperti
+            # 'pesawatUnited' atau 'Airlinesmendarat' yang ter-join tanpa spasi.
+            print("[INFO] Tidak ada dokumen ditemukan oleh Whoosh. Mencoba fallback substring scan pada CSV...")
+            found = []
+            terms = [t.lower() for t in query.split() if t.strip()]
+            dataset_dir = "dataset"
+            for root, _, files in os.walk(dataset_dir):
+                for file in files:
+                    if file.endswith('.csv'):
+                        path = os.path.join(root, file)
+                        try:
+                            df = pd.read_csv(path, encoding='utf-8', on_bad_lines='skip', quotechar='"')
+                            col = detect_text_column(df)
+                            if not col:
+                                continue
+                            for i, row in df.iterrows():
+                                raw = str(row[col]).lower()
+                                if all(t in raw for t in terms):
+                                    title = f"{file}_row_{i}"
+                                    found.append((title, preprocess(raw)))
+                        except Exception:
+                            continue
+
+            if not found:
+                print("[INFO] Tidak ada dokumen ditemukan untuk query tersebut.")
+                return
+
+            docs = found
 
         print(f"[INFO] Ditemukan {len(docs)} dokumen relevan untuk query '{query}'.")
 
