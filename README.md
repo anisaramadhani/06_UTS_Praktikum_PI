@@ -36,6 +36,7 @@ Kemudian pilih menu yang tersedia:
 1. Load & Index Dataset
 2. Search Query
 3. Exit
+
 ====================================
 
 **🧾 Contoh Penggunaan**
@@ -45,7 +46,9 @@ Kemudian pilih menu yang tersedia:
 Pilih menu (1/2/3): 1
 
 [INFO] Indexed kompas.csv (kolom: konten, 51234 baris)
+
 [INFO] Indexed tempo.csv (kolom: isi, 48000 baris)
+
 [INFO] Indexing selesai. Total dokumen terindeks: 99234
 
 2️⃣ Mencari Query:
@@ -92,7 +95,7 @@ Sistem diuji menggunakan lima dataset:
 4. tempo.csv
 5. mojok.csv
 
-Hasil pengujian menunjukkan bahwa sistem mampu memproses puluhan ribu dokumen dan menghasilkan pencarian dengan waktu respon cepat (<3 detik untuk query tunggal) serta hasil relevan sesuai konteks kata kunci.
+Hasil pengujian menunjukkan bahwa sistem mampu memproses puluhan ribu dokumen dan menghasilkan pencarian dengan waktu respon cepat serta hasil relevan sesuai konteks kata kunci.
 
 **Kesimpulan**
 
